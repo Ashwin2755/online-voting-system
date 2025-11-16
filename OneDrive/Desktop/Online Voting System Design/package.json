@@ -1,0 +1,22 @@
+{
+  "name": "voting-system",
+  "version": "1.0.0",
+  "description": "Online Voting System with separated backend and frontend",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && npm start",
+    "build": "npm run build:frontend",
+    "build:frontend": "cd frontend && npm run build",
+    "start:frontend": "cd frontend && npm run dev",
+    "start:backend": "cd backend && npm start"
+  },
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
