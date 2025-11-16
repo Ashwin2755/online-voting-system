@@ -1,5 +1,6 @@
 import { motion } from "motion/react";
 import { ShieldCheck, UserCircle } from "lucide-react";
+import campusImage from "../assets/photo.png";
 
 interface LandingPageProps {
   onSelectPortal: (portal: "admin" | "student") => void;
@@ -11,7 +12,7 @@ export function LandingPage({ onSelectPortal }: LandingPageProps) {
       {/* Background Image with Overlay */}
       <div className="absolute inset-0">
         <img
-          src="/src/assets/photo.png"
+          src={campusImage}
           alt="Nandha Engineering College Campus"
           className="w-full h-full object-cover filter blur-sm"
         />
