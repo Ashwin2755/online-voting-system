@@ -446,7 +446,9 @@ class ApiService {
   async forgotPassword(email: string): Promise<ForgotPasswordResponse> {
     const response = await fetch(`${API_BASE_URL}/student/forgot-password`, {
       method: 'POST',
-      headers: this.getAuthHeaders(),
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({ email }),
     });
 
@@ -461,7 +463,9 @@ class ApiService {
   async verifyOTP(email: string, otp: string): Promise<VerifyOTPResponse> {
     const response = await fetch(`${API_BASE_URL}/student/verify-otp`, {
       method: 'POST',
-      headers: this.getAuthHeaders(),
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({ email, otp }),
     });
 
@@ -476,7 +480,9 @@ class ApiService {
   async resetPassword(email: string, otp: string, newPassword: string): Promise<ResetPasswordResponse> {
     const response = await fetch(`${API_BASE_URL}/student/reset-password`, {
       method: 'POST',
-      headers: this.getAuthHeaders(),
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({ email, otp, newPassword }),
     });
 

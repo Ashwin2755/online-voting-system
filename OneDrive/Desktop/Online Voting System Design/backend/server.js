@@ -143,11 +143,15 @@ const sendOTPEmail = async (email, otp) => {
   };
 
   try {
+    console.log('Attempting to send OTP email to:', email);
+    console.log('Email service configured. User:', process.env.EMAIL_USER ? process.env.EMAIL_USER.substring(0, 5) + '...' : 'NOT SET');
+    
     await transporter.sendMail(mailOptions);
     console.log('OTP email sent successfully to:', email);
     return true;
   } catch (error) {
-    console.error('Error sending OTP email:', error);
+    console.error('Error sending OTP email to', email, ':', error.message);
+    console.error('Full error:', error);
     return false;
   }
 };
@@ -313,38 +317,48 @@ app.post('/api/student/forgot-password', async (req, res) => {
       return res.status(400).json({ message: 'Email is required' });
     }
 
-    // Check if student exists
-    const student = await Student.findOne({ email });
+    console.log('Forgot password request for email:', email);
+
+    // Check if student exists (case-insensitive search)
+    const student = await Student.findOne({ email: { $regex: `^${email}$`, $options: 'i' } });
     if (!student) {
+      console.log('No student found for email:', email);
       return res.status(404).json({ message: 'No account found with this email address' });
     }
 
+    console.log('Student found:', student.email);
+
     // Generate OTP
     const otp = generateOTP();
+    console.log('Generated OTP:', otp);
 
     // Delete any existing OTPs for this email
-    await OTP.deleteMany({ email, type: 'forgot-password' });
+    await OTP.deleteMany({ email: student.email, type: 'forgot-password' });
 
     // Save new OTP
-    await OTP.create({
-      email,
+    const savedOTP = await OTP.create({
+      email: student.email,
       otp,
       type: 'forgot-password'
     });
+    console.log('OTP saved to database:', savedOTP);
 
     // Send OTP email
-    const emailSent = await sendOTPEmail(email, otp);
+    const emailSent = await sendOTPEmail(student.email, otp);
     if (!emailSent) {
+      console.error('Failed to send OTP email');
       return res.status(500).json({ message: 'Failed to send OTP email. Please try again.' });
     }
 
+    console.log('OTP email sent successfully');
+
     res.json({ 
       message: 'OTP sent successfully to your email address',
-      email: email.replace(/(.{2})(.*)(?=.{2})/, (gp1, gp2, gp3) => gp2 + '*'.repeat(gp3.length))
+      email: student.email.replace(/(.{2})(.*)(?=.{2})/, (gp1, gp2, gp3) => gp2 + '*'.repeat(gp3.length))
     });
   } catch (error) {
     console.error('Forgot password error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error: ' + error.message });
   }
 });
 
@@ -357,16 +371,21 @@ app.post('/api/student/verify-otp', async (req, res) => {
       return res.status(400).json({ message: 'Email and OTP are required' });
     }
 
-    // Find valid OTP
+    console.log('Verifying OTP for email:', email, 'OTP:', otp);
+
+    // Find valid OTP (case-insensitive email)
     const otpRecord = await OTP.findOne({ 
-      email, 
+      email: { $regex: `^${email}$`, $options: 'i' }, 
       otp, 
       type: 'forgot-password' 
     });
 
     if (!otpRecord) {
+      console.log('Invalid or expired OTP for email:', email);
       return res.status(400).json({ message: 'Invalid or expired OTP' });
     }
+
+    console.log('OTP verified successfully for:', email);
 
     // OTP is valid
     res.json({ 
@@ -375,7 +394,7 @@ app.post('/api/student/verify-otp', async (req, res) => {
     });
   } catch (error) {
     console.error('OTP verification error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error: ' + error.message });
   }
 });
 
@@ -392,41 +411,49 @@ app.post('/api/student/reset-password', async (req, res) => {
       return res.status(400).json({ message: 'Password must be at least 6 characters long' });
     }
 
-    // Verify OTP one more time
+    console.log('Reset password request for email:', email);
+
+    // Verify OTP one more time (case-insensitive email)
     const otpRecord = await OTP.findOne({ 
-      email, 
+      email: { $regex: `^${email}$`, $options: 'i' }, 
       otp, 
       type: 'forgot-password' 
     });
 
     if (!otpRecord) {
+      console.log('Invalid or expired OTP for reset password');
       return res.status(400).json({ message: 'Invalid or expired OTP' });
     }
+
+    console.log('OTP verified, proceeding with password reset');
 
     // Hash new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // Update student password
+    // Update student password (case-insensitive)
     const student = await Student.findOneAndUpdate(
-      { email },
+      { email: { $regex: `^${email}$`, $options: 'i' } },
       { password: hashedPassword },
       { new: true }
     );
 
     if (!student) {
+      console.log('Student not found for password reset:', email);
       return res.status(404).json({ message: 'Student not found' });
     }
 
     // Delete used OTP
     await OTP.deleteOne({ _id: otpRecord._id });
 
+    console.log('Password reset successfully for:', student.email);
+
     res.json({ 
       message: 'Password reset successfully',
       success: true 
     });
   } catch (error) {
-    console.error('Password reset error:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Reset password error:', error);
+    res.status(500).json({ message: 'Server error: ' + error.message });
   }
 });
 
