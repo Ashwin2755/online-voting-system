@@ -374,9 +374,15 @@ export function AdminDashboard({
                                   </>
                                 )}
                                 {realTimeStatus === "Ended" && (
-                                  <span className="text-xs text-gray-500 px-2 py-1 bg-gray-100 rounded">
-                                    Election Ended
-                                  </span>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleDeleteElection(election)}
+                                    className="h-8 w-8 p-0 hover:bg-red-50"
+                                    title="Delete Completed Election"
+                                  >
+                                    <Trash2 className="w-4 h-4 text-red-600" />
+                                  </Button>
                                 )}
                               </div>
                             </div>

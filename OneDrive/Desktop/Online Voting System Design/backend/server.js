@@ -639,26 +639,51 @@ app.delete('/api/admin/elections/:id', async (req, res) => {
   try {
     const electionId = req.params.id;
 
-    // Check if there are any votes for this election
-    const voteCount = await Vote.countDocuments({ electionId });
-    if (voteCount > 0) {
-      return res.status(400).json({ message: 'Cannot delete election that has votes' });
-    }
+    console.log('Attempting to delete election:', electionId);
 
-    // Delete all candidates for this election first
-    await Candidate.deleteMany({ electionId });
-
-    // Delete the election
-    const election = await Election.findByIdAndDelete(electionId);
-
+    // Get the election to check its status
+    const election = await Election.findById(electionId);
     if (!election) {
       return res.status(404).json({ message: 'Election not found' });
     }
 
-    res.json({ message: 'Election deleted successfully' });
+    // Check election status
+    const now = new Date();
+    const endDate = new Date(election.endDate);
+    const isCompleted = now > endDate;
+
+    // For ongoing/upcoming elections, prevent deletion if there are votes
+    if (!isCompleted) {
+      const voteCount = await Vote.countDocuments({ electionId });
+      if (voteCount > 0) {
+        console.log('Cannot delete ongoing/upcoming election with votes');
+        return res.status(400).json({ message: 'Cannot delete an election that has votes' });
+      }
+    }
+
+    console.log('Election status - Completed:', isCompleted, 'Deleting candidates...');
+
+    // Delete all candidates for this election first
+    const candidateDeleteResult = await Candidate.deleteMany({ electionId });
+    console.log('Deleted candidates:', candidateDeleteResult.deletedCount);
+
+    // Delete all votes for this election (for completed elections with votes)
+    if (isCompleted) {
+      const voteDeleteResult = await Vote.deleteMany({ electionId });
+      console.log('Deleted votes:', voteDeleteResult.deletedCount);
+    }
+
+    // Delete the election
+    const deletedElection = await Election.findByIdAndDelete(electionId);
+    console.log('Election deleted successfully:', deletedElection._id);
+
+    res.json({ 
+      message: 'Election deleted successfully',
+      deletedElection: deletedElection 
+    });
   } catch (error) {
     console.error('Error deleting election:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Server error: ' + error.message });
   }
 });
 
