@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { LogOut, Vote, History, TrendingUp, Trash2 } from "lucide-react";
+import { LogOut, Vote, TrendingUp } from "lucide-react";
 import { Button } from "./ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { ElectionCard } from "./ElectionCard";
@@ -14,6 +14,8 @@ interface StudentDashboardProps {
   votes: any[];
   onVote: (electionId: string, election?: any) => void;
   onViewResults: (electionId: string) => void;
+  studentVotes?: any[];
+  setStudentVotes?: (v: any[]) => void;
 }
 
 export function StudentDashboard({
@@ -22,25 +24,37 @@ export function StudentDashboard({
   votes,
   onVote,
   onViewResults,
+  studentVotes: studentVotesProp,
+  setStudentVotes: setStudentVotesProp,
 }: StudentDashboardProps) {
   const [elections, setElections] = useState<Election[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [studentVotes, setStudentVotes] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Load elections and candidates from backend
+  // Load elections, candidates, and student votes from backend
   useEffect(() => {
     loadElections();
     loadCandidates();
+    // If parent passed down studentVotes, use those immediately; otherwise fetch
+    if (studentVotesProp && Array.isArray(studentVotesProp)) {
+      console.log('Using studentVotes from parent prop:', studentVotesProp);
+      setStudentVotes(studentVotesProp);
+    } else {
+      loadStudentVotes();
+    }
     
-    // Set up periodic refresh to catch new candidates added by admin
+    // Set up periodic refresh to catch new candidates and votes added by admin
     const intervalId = setInterval(() => {
       loadElections();
       loadCandidates();
+      // Don't re-fetch votes on interval if parent is managing them
+      if (!studentVotesProp) loadStudentVotes();
     }, 10000); // Refresh every 10 seconds
     
     return () => clearInterval(intervalId);
-  }, []);
+  }, [student.studentId, studentVotesProp]);
 
   const loadElections = async () => {
     try {
@@ -62,6 +76,37 @@ export function StudentDashboard({
       setCandidates(candidatesData);
     } catch (err) {
       console.error('Error loading candidates:', err);
+    }
+  };
+
+  // Load student's votes from backend
+  const loadStudentVotes = async () => {
+    try {
+      if (student && student.studentId) {
+        // Fetch all votes for this student from the backend
+        console.log('=== LOADING STUDENT VOTES ===');
+        console.log('Student ID:', student.studentId);
+        const studentVotesData = await apiService.getStudentVotes(student.studentId);
+        console.log('Raw votes from backend:', studentVotesData);
+        
+        if (studentVotesData && studentVotesData.length > 0) {
+          console.log('First vote structure:', {
+            electionId: studentVotesData[0].electionId,
+            candidateId: studentVotesData[0].candidateId,
+            studentId: studentVotesData[0].studentId,
+            votedAt: studentVotesData[0].votedAt
+          });
+        }
+        
+        setStudentVotes(studentVotesData);
+        // If parent provided a setter, update it so other parts of the app
+        // (e.g. App) can stay in sync.
+        if (setStudentVotesProp) setStudentVotesProp(studentVotesData);
+      }
+    } catch (err) {
+      console.error('Error loading student votes:', err);
+      setStudentVotes([]);
+      if (setStudentVotesProp) setStudentVotesProp([]);
     }
   };
 
@@ -90,11 +135,13 @@ export function StudentDashboard({
   const endedElections = electionsWithStatus.filter((e) => e.status === "Ended");
 
   const hasVoted = (electionId: string) => {
-    return votes.some((v) => v.electionId === electionId && v.studentId === student.studentId);
-  };
-
-  const getVoteHistory = () => {
-    return votes.filter((v) => v.studentId === student.studentId);
+    const voted = studentVotes.some((v) => {
+      const vElectionId = String(v.electionId || '');
+      const electionIdStr = String(electionId);
+      return vElectionId === electionIdStr;
+    });
+    
+    return voted;
   };
 
   // Function to get candidate count for an election
@@ -112,35 +159,6 @@ export function StudentDashboard({
     loadElections();
     loadCandidates();
     console.log('Tab changed to:', value, 'Refreshing data...');
-  };
-
-  // Function to delete a single vote record
-  const handleDeleteSingleVote = async (voteId: string) => {
-    try {
-      await apiService.deleteVote(voteId);
-      // Reload votes after deletion
-      loadElections();
-      loadCandidates();
-      console.log('Vote deleted successfully');
-    } catch (err) {
-      console.error('Error deleting vote:', err);
-      setError('Failed to delete vote');
-    }
-  };
-
-  // Function to delete all vote history for the student
-  const handleDeleteVoteHistory = async () => {
-    try {
-      const voteIds = getVoteHistory().map((v) => v._id);
-      await Promise.all(voteIds.map((id) => apiService.deleteVote(id)));
-      // Reload votes after deletion
-      loadElections();
-      loadCandidates();
-      console.log('All votes deleted successfully');
-    } catch (err) {
-      console.error('Error deleting votes:', err);
-      setError('Failed to delete vote history');
-    }
   };
 
   return (
@@ -178,7 +196,7 @@ export function StudentDashboard({
               name={student.fullName}
               studentId={student.studentId}
               department={student.department}
-              hasVoted={votes.some((v) => v.studentId === student.studentId)}
+              hasVoted={studentVotes.length > 0}
             />
           </div>
 
@@ -205,13 +223,6 @@ export function StudentDashboard({
                 <TrendingUp className="w-4 h-4 mr-2" />
                 Results
               </TabsTrigger>
-              <TabsTrigger 
-                value="history"
-                className="data-[state=active]:bg-[#1e3a8a] data-[state=active]:text-white font-medium"
-              >
-                <History className="w-4 h-4 mr-2" />
-                Vote History
-              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="ongoing">
@@ -223,42 +234,56 @@ export function StudentDashboard({
                   </div>
                 ) : (
                   <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {ongoingElections.map((election) => (
-                      <div
-                        key={election._id}
-                        className="border border-[#d4af37]/30 rounded-lg p-4 hover:border-[#d4af37] transition-all duration-300 bg-gradient-to-br from-white to-[#1e3a8a]/5 shadow-md hover:shadow-lg"
-                      >
-                        <div className="mb-4">
-                          <h4 className="text-[#1e3a8a] text-lg mb-2">{election.title}</h4>
-                          <p className="text-gray-600 text-sm mb-2">{election.description}</p>
-                          <p className="text-sm text-gray-600 mb-2">
-                            {new Date(election.startDate).toLocaleDateString()} - {new Date(election.endDate).toLocaleDateString()}
-                          </p>
-                          <div className="flex items-center justify-between mb-3">
-                            <span className="inline-block px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
-                              {election.status}
-                            </span>
-                            <span className="text-xs text-gray-500">
-                              Candidates: {getCandidateCount(election._id)}
-                            </span>
+                    {ongoingElections.map((election) => {
+                      const voted = hasVoted(election._id);
+                      console.log(`Election ${election._id}: hasVoted = ${voted}`);
+                      return (
+                        <div
+                          key={election._id}
+                          className="border border-[#d4af37]/30 rounded-lg p-4 hover:border-[#d4af37] transition-all duration-300 bg-gradient-to-br from-white to-[#1e3a8a]/5 shadow-md hover:shadow-lg"
+                        >
+                          <div className="mb-4">
+                            <h4 className="text-[#1e3a8a] text-lg mb-2">{election.title}</h4>
+                            <p className="text-gray-600 text-sm mb-2">{election.description}</p>
+                            <p className="text-sm text-gray-600 mb-2">
+                              {new Date(election.startDate).toLocaleDateString()} - {new Date(election.endDate).toLocaleDateString()}
+                            </p>
+                            <div className="flex items-center justify-between mb-3">
+                              <span className="inline-block px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">
+                                {election.status}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                Candidates: {getCandidateCount(election._id)}
+                              </span>
+                            </div>
                           </div>
+                          {!voted && (
+                            <Button
+                              onClick={() => onVote(election._id, election)}
+                              className="w-full bg-gradient-to-r from-[#1e3a8a] to-[#1e3a8a]/80 hover:from-[#1e3a8a]/90 hover:to-[#1e3a8a] text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300"
+                            >
+                              <Vote className="w-4 h-4 mr-2" />
+                              Vote Now
+                            </Button>
+                          )}
+                          {voted && (
+                            <div className="w-full">
+                              <div className="flex items-center justify-center gap-2 p-3 bg-gradient-to-r from-green-50 to-green-100 border border-green-200 rounded-lg">
+                                <Vote className="w-4 h-4 text-green-600" />
+                                <span className="text-green-700 font-medium">Voted</span>
+                              </div>
+                              <Button
+                                disabled
+                                className="w-full mt-2 bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed"
+                              >
+                                <Vote className="w-4 h-4 mr-2" />
+                                Vote Now
+                              </Button>
+                            </div>
+                          )}
                         </div>
-                        {!hasVoted(election._id) && (
-                          <Button 
-                            onClick={() => onVote(election._id, election)}
-                            className="w-full bg-gradient-to-r from-[#d4af37] to-[#1e3a8a] text-white hover:from-[#b8941e] hover:to-[#1e3a8a]/90 transition-all duration-300 font-medium"
-                          >
-                            <Vote className="w-4 h-4 mr-2" />
-                            Vote Now
-                          </Button>
-                        )}
-                        {hasVoted(election._id) && (
-                          <div className="w-full p-2 bg-gray-100 rounded text-center text-gray-600 text-sm">
-                            ✓ You have already voted
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                     {ongoingElections.length === 0 && !isLoading && (
                       <p className="text-gray-500 col-span-3 text-center py-8">
                         No ongoing elections at the moment
@@ -339,82 +364,6 @@ export function StudentDashboard({
                   {endedElections.length === 0 && !isLoading && (
                     <p className="text-gray-500 col-span-3 text-center py-8">
                       No results available yet
-                    </p>
-                  )}
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="history">
-              <div className="bg-gradient-to-br from-white to-[#1e3a8a]/5 rounded-lg shadow-lg p-6 border border-[#d4af37]/20">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-[#1e3a8a] font-bold">Your Voting History</h3>
-                  {getVoteHistory().length > 0 && (
-                    <Button
-                      onClick={() => {
-                        if (confirm('Are you sure you want to delete all your voting history? This action cannot be undone.')) {
-                          handleDeleteVoteHistory();
-                        }
-                      }}
-                      variant="outline"
-                      size="sm"
-                      className="border-red-500 text-red-500 hover:bg-red-50"
-                    >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Clear History
-                    </Button>
-                  )}
-                </div>
-                <div className="space-y-4">
-                  {getVoteHistory().map((vote) => {
-                    const election = elections.find((e) => e._id === vote.electionId);
-                    const candidate = candidates.find((c) => c._id === vote.candidateId);
-                    return (
-                      <div
-                        key={vote._id}
-                        className="border border-[#d4af37]/30 rounded-lg p-4 hover:border-[#d4af37] transition-all duration-300 bg-gradient-to-br from-white to-[#1e3a8a]/5 shadow-md hover:shadow-lg"
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <h4 className="text-[#1e3a8a] mb-1 font-semibold">{election?.title}</h4>
-                            <p className="text-gray-600 mb-1">
-                              Voted for: <span className="text-[#d4af37] font-semibold">{candidate?.name}</span>
-                            </p>
-                            <p className="text-sm text-gray-600 mb-2">
-                              Position: <span className="font-semibold">{candidate?.position}</span>
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              Voted on: {new Date(vote.votedAt).toLocaleString()}
-                            </p>
-                            <p className="text-xs text-gray-400 mt-1">
-                              Election: {new Date(election?.startDate || '').toLocaleDateString()} - {new Date(election?.endDate || '').toLocaleDateString()}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-3 ml-4">
-                            <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
-                              <Vote className="w-5 h-5 text-green-600" />
-                            </div>
-                            <Button
-                              onClick={() => {
-                                if (confirm('Delete this vote record?')) {
-                                  handleDeleteSingleVote(vote._id);
-                                }
-                              }}
-                              variant="ghost"
-                              size="sm"
-                              className="h-8 w-8 p-0 hover:bg-red-50"
-                              title="Delete this vote record"
-                            >
-                              <Trash2 className="w-4 h-4 text-red-500" />
-                            </Button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {getVoteHistory().length === 0 && (
-                    <p className="text-gray-500 text-center py-8">
-                      You haven't voted in any elections yet
                     </p>
                   )}
                 </div>

@@ -846,6 +846,30 @@ app.get('/api/vote/status/:electionId/:studentId', async (req, res) => {
   }
 });
 
+// Get all votes for a student
+app.get('/api/votes/student/:studentId', async (req, res) => {
+  try {
+    const { studentId } = req.params;
+
+    console.log('Fetching votes for student:', studentId);
+
+    const votes = await Vote.find({ studentId })
+      .populate('electionId', '_id title description')
+      .populate('candidateId', '_id name position');
+    
+    console.log('Found votes:', votes.length);
+    if (votes.length > 0) {
+      console.log('Sample vote:', votes[0]);
+    }
+
+    // Return array of votes with proper structure
+    res.json(votes);
+  } catch (error) {
+    console.error('Get student votes error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 // Delete a vote record
 app.delete('/api/vote/:voteId', async (req, res) => {
   try {

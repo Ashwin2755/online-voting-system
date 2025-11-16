@@ -73,6 +73,8 @@ export default function App() {
   const [currentStudent, setCurrentStudent] = useState<Student | null>(null);
   const [selectedElectionId, setSelectedElectionId] = useState<string | null>(null);
   const [selectedElection, setSelectedElection] = useState<any | null>(null);
+  const [refreshKey, setRefreshKey] = useState<number>(0);
+  const [studentVotes, setStudentVotes] = useState<any[]>([]);
 
   // Clear any stored authentication on app load to always start fresh
   useEffect(() => {
@@ -205,6 +207,17 @@ export default function App() {
       year: userData.year || ''
     });
     setCurrentPage("student-dashboard");
+
+    // Load the student's votes immediately after login so the dashboard
+    // can show correct "Voted" state without extra refresh.
+    if (userData.studentId) {
+      apiService.getStudentVotes(userData.studentId)
+        .then((data) => setStudentVotes(data || []))
+        .catch((err) => {
+          console.error('Error loading student votes on login:', err);
+          setStudentVotes([]);
+        });
+    }
   };
 
   const handleStudentRegister = () => {
@@ -254,21 +267,40 @@ export default function App() {
     setCurrentPage("voting");
   };
 
-  const handleSubmitVote = (candidateId: string) => {
+  const handleSubmitVote = async (candidateId: string) => {
     if (!currentStudent || !selectedElectionId) return;
 
-    const newVote: Vote = {
-      id: Date.now().toString(),
-      electionId: selectedElectionId,
-      candidateId,
-      studentId: currentStudent.studentId,
-      timestamp: new Date().toISOString(),
-    };
+    try {
+      // Update studentVotes from backend FIRST before navigating
+      // so the dashboard receives the updated votes immediately
+      if (currentStudent && currentStudent.studentId) {
+        console.log('Fetching updated votes after submission for student:', currentStudent.studentId);
+        const updated = await apiService.getStudentVotes(currentStudent.studentId);
+        console.log('Updated student votes from backend:', updated);
+        setStudentVotes(updated || []);
+      }
 
-    setVotes([...votes, newVote]);
-    toast.success("Vote submitted successfully!");
-    setCurrentPage("student-dashboard");
-    setSelectedElectionId(null);
+      // Add to local votes for any other local state tracking
+      const newVote: Vote = {
+        id: Date.now().toString(),
+        electionId: selectedElectionId,
+        candidateId,
+        studentId: currentStudent.studentId,
+        timestamp: new Date().toISOString(),
+      };
+      setVotes([...votes, newVote]);
+
+      toast.success("Vote submitted successfully!");
+      
+      // Force refresh of StudentDashboard (key change) and navigate
+      setRefreshKey(prev => prev + 1);
+      setCurrentPage("student-dashboard");
+      setSelectedElectionId(null);
+      setSelectedElection(null);
+    } catch (err) {
+      console.error('Failed to process vote submission:', err);
+      toast.error('Error processing your vote');
+    }
   };
 
   const handleViewResults = async (electionId: string) => {
@@ -352,18 +384,22 @@ export default function App() {
       case "student-dashboard":
         return currentStudent ? (
           <StudentDashboard
+            key={refreshKey}
             student={currentStudent}
             onLogout={handleLogout}
             votes={votes}
             onVote={handleVoteClick}
+            studentVotes={studentVotes}
+            setStudentVotes={setStudentVotes}
             onViewResults={handleViewResults}
           />
         ) : null;
 
       case "voting":
-        return selectedElection ? (
+        return selectedElection && currentUser ? (
           <VotingPage
             election={selectedElection}
+            currentUser={currentUser}
             onSubmitVote={handleSubmitVote}
             onBack={() => setCurrentPage("student-dashboard")}
           />

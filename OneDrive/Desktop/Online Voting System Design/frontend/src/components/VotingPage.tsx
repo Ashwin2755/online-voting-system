@@ -18,11 +18,12 @@ import {
 
 interface VotingPageProps {
   election: any;
+  currentUser?: any;
   onSubmitVote: (candidateId: string) => void;
   onBack: () => void;
 }
 
-export function VotingPage({ election, onSubmitVote, onBack }: VotingPageProps) {
+export function VotingPage({ election, currentUser: propCurrentUser, onSubmitVote, onBack }: VotingPageProps) {
   const [selectedCandidate, setSelectedCandidate] = useState<string | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -31,18 +32,22 @@ export function VotingPage({ election, onSubmitVote, onBack }: VotingPageProps) 
   const [voteStatus, setVoteStatus] = useState<VoteStatus | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
 
-  // Load candidates for this specific election and check vote status
+    // Load candidates for this specific election and check vote status
   useEffect(() => {
     if (election) {
       console.log('VotingPage - Loading candidates for election:', election);
-      const user = apiService.getCurrentUser();
+      const user = propCurrentUser || apiService.getCurrentUser();
       setCurrentUser(user);
-      loadCandidatesForElection();
+      
       if (user && user.studentId) {
+        loadCandidatesForElection();
         checkVoteStatus(user.studentId);
+      } else {
+        console.warn('No user found or missing studentId');
+        setIsLoading(false);
       }
     }
-  }, [election]);
+  }, [election, propCurrentUser]);
 
   const loadCandidatesForElection = async () => {
     try {
@@ -104,6 +109,12 @@ export function VotingPage({ election, onSubmitVote, onBack }: VotingPageProps) 
         setSelectedCandidate(null);
         
         console.log('Vote submitted successfully');
+        
+        // Navigate back to student dashboard to show updated data
+        if (onBack) {
+          onBack();
+        }
+        
       } catch (err) {
         console.error('Error submitting vote:', err);
         alert(`Error submitting vote: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -142,24 +153,6 @@ export function VotingPage({ election, onSubmitVote, onBack }: VotingPageProps) 
           <p className="text-gray-600">{election.description}</p>
         </div>
       </header>
-
-      {/* Vote Status Alert */}
-      {voteStatus && voteStatus.hasVoted && (
-        <div className="container mx-auto px-6 py-4">
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-green-600" />
-              <div>
-                <h4 className="font-semibold text-green-800">Vote Already Submitted</h4>
-                <p className="text-green-700">
-                  You voted for <strong>{voteStatus.votedFor}</strong> on{' '}
-                  {voteStatus.votedAt ? new Date(voteStatus.votedAt).toLocaleString() : 'Unknown time'}
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Main Content */}
       <main className="container mx-auto px-6 py-8">

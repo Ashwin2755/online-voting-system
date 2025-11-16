@@ -364,6 +364,44 @@ class ApiService {
     return await response.json();
   }
 
+  async getStudentVotes(studentId: string): Promise<any[]> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/votes/student/${studentId}`, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+      });
+
+      if (!response.ok) {
+        console.error('Failed to fetch student votes:', response.status);
+        return [];
+      }
+
+      const data = await response.json();
+      console.log('Student votes fetched from backend:', data);
+      
+      if (!Array.isArray(data)) {
+        return [];
+      }
+
+      // Normalize the vote data to ensure electionId is always accessible
+      const normalizedVotes = data.map((vote) => {
+        return {
+          ...vote,
+          // Ensure electionId is a string ID
+          electionId: typeof vote.electionId === 'string' 
+            ? vote.electionId 
+            : vote.electionId?._id || vote.electionId?.id
+        };
+      });
+
+      console.log('Normalized votes:', normalizedVotes);
+      return normalizedVotes;
+    } catch (error) {
+      console.error('Error fetching student votes:', error);
+      return [];
+    }
+  }
+
   async getVoteStatus(electionId: string, studentId: string): Promise<VoteStatus> {
     const response = await fetch(`${API_BASE_URL}/vote/status/${electionId}/${studentId}`, {
       method: 'GET',
