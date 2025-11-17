@@ -5,6 +5,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
+import { toast } from "sonner";
 
 interface CreateElectionProps {
   onSubmit: (election: {
@@ -26,6 +27,7 @@ export function CreateElection({ onSubmit }: CreateElectionProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit(formData);
+    toast.success("Election created successfully!");
     setFormData({ title: "", description: "", startDate: "", endDate: "" });
   };
 

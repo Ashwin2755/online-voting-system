@@ -6,6 +6,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Election, CreateCandidateData } from "../services/api";
+import { toast } from "sonner";
 
 interface CreateCandidateProps {
   elections: Election[];
@@ -56,6 +57,7 @@ export function CreateCandidate({ elections, onSubmit }: CreateCandidateProps) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSubmit(formData);
+    toast.success("Candidate added successfully!");
     setFormData({ name: "", position: "", electionId: "", department: "", photoUrl: "" });
     setPhotoPreview("");
   };
